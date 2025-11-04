@@ -184,6 +184,16 @@ function assertAdminAccess() {
   return true;
 }
 
+function openAdminTool(view = 'users') {
+  if (!assertAdminAccess()) return;
+  const target = `./admin-tools.html?view=${encodeURIComponent(view)}`;
+  if (window.matchMedia('(max-width: 720px)').matches) {
+    window.location.href = target;
+  } else {
+    window.open(target, 'kyoteeAdminTool', 'width=960,height=720');
+  }
+}
+
 function persistPrefs() {
   localStorage.setItem(
     PREFS_KEY,
@@ -664,6 +674,22 @@ function checkPostCreatedFlag() {
   if (!currentUser) return;
   ensureFeed(true).catch((error) => console.error('Feed refresh after post failed:', error));
   showSnackbar('Post published.');
+}
+
+function handleDeepLinks() {
+  try {
+    const url = new URL(window.location.href);
+    const profileParam = url.searchParams.get('profile');
+    if (profileParam && currentUser) {
+      openProfileFromSearch(profileParam);
+    }
+    if (profileParam) {
+      url.searchParams.delete('profile');
+      window.history.replaceState({}, '', url);
+    }
+  } catch (_error) {
+    // ignore malformed URLs
+  }
 }
 
 function getCommentState(postId) {
@@ -2036,12 +2062,22 @@ async function markConversationRead(friendId) {
 async function openChat(friend) {
   activeChat = friend.id;
   chatUsername.textContent = friend.username || 'Friend';
-  chatSubtitle.textContent = 'Active now';
+  const initialSubtitle = friend.lastMessageAt
+    ? `Last message ${formatRelative(friend.lastMessageAt)}`
+    : 'No messages yet';
+  chatSubtitle.textContent = initialSubtitle;
   setAvatar(chatAvatar, friend.username, friend.avatarUrl);
   chatCard.hidden = false;
   resetChatAttachment();
   messagesList.innerHTML = '<p class="muted centered">Loading conversation…</p>';
   await loadConversation(friend.id);
+  const conversation = appState.conversations[friend.id] || [];
+  if (conversation.length) {
+    const lastMessage = conversation[conversation.length - 1];
+    chatSubtitle.textContent = `Last message ${formatRelative(lastMessage.created_at)}`;
+  } else {
+    chatSubtitle.textContent = 'No messages yet';
+  }
   renderChat();
   msgInput.focus();
   await markConversationRead(friend.id);
@@ -2076,6 +2112,7 @@ async function sendMessage() {
   const conversation = appState.conversations[activeChat] || [];
   conversation.push(optimistic);
   appState.conversations[activeChat] = conversation;
+  chatSubtitle.textContent = `Last message ${formatRelative(optimistic.created_at)}`;
   renderChat();
   msgInput.value = '';
   resetChatAttachment();
@@ -2123,6 +2160,10 @@ async function sendMessage() {
     }
     appState.conversations[activeChat] = conversation;
     renderChat();
+    if (conversation.length) {
+      const latest = conversation[conversation.length - 1];
+      chatSubtitle.textContent = `Last message ${formatRelative(latest.created_at)}`;
+    }
     await loadFriends();
     if (persistedMessage) {
       storeLocalMessage(currentUser.id, activeChat, persistedMessage);
@@ -3021,6 +3062,8 @@ async function init() {
         console.error('Friend requests preload failed:', error),
       );
       ensureFeed(true).catch((error) => console.error('Feed preload failed:', error));
+      handleDeepLinks();
+      checkPostCreatedFlag();
     } else {
       showAuth(true);
     }
@@ -3048,6 +3091,7 @@ async function init() {
       console.error('Friend requests preload failed:', error),
     );
     ensureFeed(true).catch((error) => console.error('Feed preload failed:', error));
+    handleDeepLinks();
     checkPostCreatedFlag();
   } else {
     showAuth(true);
@@ -3386,20 +3430,17 @@ window.addEventListener('storage', (event) => {
 
 if (adminUserSearchBtn) {
   adminUserSearchBtn.addEventListener('click', () => {
-    if (!assertAdminAccess()) return;
-    showSnackbar('Open the admin dashboard in the Flutter app or Supabase.');
+    openAdminTool('users');
   });
 }
 if (adminBanDashboardBtn) {
   adminBanDashboardBtn.addEventListener('click', () => {
-    if (!assertAdminAccess()) return;
-    showSnackbar('Ban management is not available in this preview.');
+    openAdminTool('bans');
   });
 }
 if (adminReportsBtn) {
   adminReportsBtn.addEventListener('click', () => {
-    if (!assertAdminAccess()) return;
-    showSnackbar('Reports are only viewable in the full app.');
+    openAdminTool('reports');
   });
 }
 

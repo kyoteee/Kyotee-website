@@ -5,96 +5,51 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Create Kyotee Post</title>
   <link rel="icon" href="/favicon.ico" />
+  <link rel="stylesheet" href="style.css" />
   <style>
-    :root {
-      --primary: #7c3aed;
-      --primary-strong: #5b21b6;
-      --bg: #f4f6fb;
-      --surface: #ffffff;
-      --text: #111827;
-      --muted: #6b7280;
-      --border: rgba(148, 163, 184, 0.35);
-      --danger: #ef4444;
-    }
     body {
-      margin: 0;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 24px;
+      background: var(--bg);
     }
-    .card {
-      width: min(520px, 100%);
-      background: var(--surface);
-      border-radius: 20px;
-      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.12);
-      padding: 28px;
+    .composer-card {
+      width: min(560px, 100%);
+      gap: 20px;
+      padding: 28px 26px;
+    }
+    .composer-header {
       display: flex;
       flex-direction: column;
-      gap: 18px;
-      border: 1px solid rgba(148, 163, 184, 0.2);
+      gap: 6px;
     }
-    h1 {
-      margin: 0;
+    .composer-header h1 {
       font-size: 22px;
-    }
-    .muted {
-      font-size: 14px;
-      color: var(--muted);
+      font-weight: 600;
       margin: 0;
     }
-    textarea {
-      resize: vertical;
+    #post-content {
       min-height: 140px;
-      padding: 12px 14px;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      font: inherit;
-      background: #f8faff;
+      resize: vertical;
     }
-    textarea:focus,
-    input:focus {
-      outline: 2px solid rgba(124, 58, 237, 0.3);
-      outline-offset: 1px;
-    }
-    .actions {
+    .composer-actions {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
       gap: 12px;
+      justify-content: space-between;
       flex-wrap: wrap;
     }
-    button {
-      border: none;
-      cursor: pointer;
-      font-weight: 600;
-      border-radius: 14px;
-      padding: 10px 18px;
+    .composer-actions > * {
       display: inline-flex;
-      align-items: center;
-      gap: 8px;
+      gap: 12px;
     }
-    .primary {
-      background: var(--primary);
-      color: #fff;
-      box-shadow: 0 8px 20px rgba(124, 58, 237, 0.25);
-    }
-    .primary:hover:not(:disabled) {
-      background: var(--primary-strong);
-    }
-    .primary:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      box-shadow: none;
-    }
-    .outlined {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text);
+    #image-preview {
+      display: none;
+      max-width: 100%;
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: var(--surface-alt);
     }
     .status {
       font-size: 14px;
@@ -104,35 +59,77 @@
     .status.error {
       color: var(--danger);
     }
-    .image-preview {
-      max-width: 100%;
-      border-radius: 12px;
-      border: 1px solid rgba(148, 163, 184, 0.25);
-      display: none;
-    }
-    .hidden {
-      display: none !important;
+    @media (max-width: 720px) {
+      body {
+        padding: 16px;
+      }
+      .composer-card {
+        padding: 24px 20px;
+      }
+      .composer-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .composer-actions > * {
+        width: 100%;
+        justify-content: stretch;
+      }
+      .composer-actions button {
+        width: 100%;
+        justify-content: center;
+      }
     }
   </style>
+  <script>
+    (function () {
+      const PREFS_KEY = 'kyotee_preview_prefs_v2';
+      const storedPrefs = (() => {
+        try {
+          return JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+        } catch (_error) {
+          return {};
+        }
+      })();
+      const preferredTheme = storedPrefs.themePreference || 'light';
+      const resolveTheme = () => {
+        if (preferredTheme === 'system') {
+          return window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+        }
+        return preferredTheme;
+      };
+      document.documentElement.dataset.theme = resolveTheme();
+      window.matchMedia &&
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+          if ((storedPrefs.themePreference || 'light') === 'system') {
+            document.documentElement.dataset.theme = resolveTheme();
+          }
+        });
+    })();
+  </script>
 </head>
 <body>
-  <div class="card">
-    <header>
+  <div class="card composer-card">
+    <header class="composer-header">
       <h1>Create post</h1>
-      <p class="muted">Share a quick update with your friends.</p>
+      <p class="muted small">Share a quick update with your friends.</p>
     </header>
-    <form id="post-form">
-      <label class="muted" for="post-content">Message</label>
-      <textarea id="post-content" placeholder="What's on your mind?" maxlength="1200"></textarea>
-      <img id="image-preview" class="image-preview" alt="Selected attachment" />
-      <div class="actions">
+    <form id="post-form" class="stack" autocomplete="off">
+      <div class="stack">
+        <label class="muted small" for="post-content">Message</label>
+        <textarea id="post-content" class="input" placeholder="What's on your mind?" maxlength="1200"></textarea>
+      </div>
+      <img id="image-preview" alt="Selected attachment" />
+      <div class="composer-actions">
         <div>
-          <button type="button" class="outlined" id="attach-btn">Add image</button>
+          <button type="button" class="outlined-btn" id="attach-btn">Add image</button>
           <input id="image-input" type="file" accept="image/*" hidden />
         </div>
         <div>
-          <button type="button" class="outlined" id="cancel-btn">Cancel</button>
-          <button type="submit" class="primary" id="submit-btn">Post</button>
+          <button type="button" class="outlined-btn" id="cancel-btn">Cancel</button>
+          <button type="submit" class="filled-btn" id="submit-btn">Post</button>
         </div>
       </div>
     </form>

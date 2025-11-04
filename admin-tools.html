@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kyotee — Admin Tools</title>
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+    }
+    .admin-card {
+      width: min(960px, 100%);
+      gap: 20px;
+      padding: 28px 26px;
+    }
+    .admin-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .admin-header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+    .admin-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .admin-tabs button {
+      border: none;
+      background: var(--surface-alt);
+      color: var(--muted);
+      padding: 8px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .admin-tabs button.active {
+      background: rgba(124, 58, 237, 0.16);
+      color: var(--primary);
+      border: 1px solid rgba(124, 58, 237, 0.35);
+    }
+    .admin-view {
+      display: none;
+      gap: 18px;
+    }
+    .admin-view.active {
+      display: flex;
+      flex-direction: column;
+    }
+    .admin-item {
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--surface-alt);
+    }
+    .admin-item-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .admin-meta {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .admin-actions-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .status {
+      font-size: 14px;
+      color: var(--muted);
+      min-height: 20px;
+    }
+    .status.error {
+      color: var(--danger);
+    }
+    .hidden {
+      display: none !important;
+    }
+    @media (max-width: 720px) {
+      body {
+        padding: 16px;
+      }
+      .admin-card {
+        padding: 24px 20px;
+      }
+      .admin-header {
+        align-items: flex-start;
+      }
+      .admin-tabs {
+        width: 100%;
+      }
+      .admin-tabs button {
+        flex: 1;
+        justify-content: center;
+      }
+      .admin-actions-row button {
+        flex: 1;
+      }
+    }
+  </style>
+  <script>
+    (function () {
+      const PREFS_KEY = 'kyotee_preview_prefs_v2';
+      const stored = (() => {
+        try {
+          return JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+        } catch (_error) {
+          return {};
+        }
+      })();
+      const pref = stored.themePreference || 'light';
+      const resolveTheme = () => {
+        if (pref === 'system') {
+          return window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+        }
+        return pref;
+      };
+      document.documentElement.dataset.theme = resolveTheme();
+      if (pref === 'system' && window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+          document.documentElement.dataset.theme = resolveTheme();
+        });
+      }
+    })();
+  </script>
+</head>
+<body>
+  <main id="admin-main" class="card admin-card hidden">
+    <header class="admin-header">
+      <div>
+        <h1>Admin Tools</h1>
+        <p class="muted small" id="admin-subtitle">Moderate the Kyotee community.</p>
+      </div>
+      <div class="admin-actions-row">
+        <button type="button" class="outlined-btn" id="refresh-view-btn">Refresh</button>
+        <button type="button" class="outlined-btn" id="close-admin-btn">Done</button>
+      </div>
+    </header>
+    <nav class="admin-tabs">
+      <button type="button" data-view="users" class="active">Moderate users</button>
+      <button type="button" data-view="bans">Ban dashboard</button>
+      <button type="button" data-view="reports">Reports</button>
+    </nav>
+    <section id="view-users" class="admin-view active">
+      <form id="user-search-form" class="stack">
+        <label class="muted small" for="user-search-input">Find a user by name, email, or ID</label>
+        <div class="row" style="gap:12px; align-items: stretch;">
+          <input id="user-search-input" class="input" placeholder="Search users…" autocomplete="off" />
+          <button type="submit" class="filled-btn" id="user-search-btn">Search</button>
+        </div>
+      </form>
+      <div id="user-search-results" class="stack"></div>
+    </section>
+    <section id="view-bans" class="admin-view">
+      <div class="admin-actions-row">
+        <button type="button" class="outlined-btn" id="refresh-bans-btn">Refresh list</button>
+      </div>
+      <div id="bans-list" class="stack"></div>
+    </section>
+    <section id="view-reports" class="admin-view">
+      <div class="admin-actions-row">
+        <button type="button" class="outlined-btn" id="refresh-reports-btn">Refresh reports</button>
+      </div>
+      <div id="reports-list" class="stack"></div>
+    </section>
+    <p id="admin-status" class="status"></p>
+  </main>
+
+  <div id="unauthorized-card" class="card admin-card hidden">
+    <h1>Access restricted</h1>
+    <p class="muted">These tools are limited to the Kyotee admin account.</p>
+    <button type="button" class="outlined-btn" id="unauthorized-close-btn">Back to app</button>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.43.4/+esm';
+
+    const SUPABASE_URL = 'https://xyteodhmrskgtttxosik.supabase.co';
+    const SUPABASE_ANON_KEY =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5dGVvZGhtcnNrZ3R0dHhvc2lrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNzEyMTMsImV4cCI6MjA3MDk0NzIxM30.O6ghjOLHmsmfeP78UWyive638WxpH-rsfqq0od6E4Fg';
+    const DEV_USER_ID = 'a41f959f-fbfe-41ae-8daf-40beaa876635';
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        detectSessionInUrl: true,
+        autoRefreshToken: true,
+        storage: localStorage,
+      },
+    });
+
+    const adminMain = document.getElementById('admin-main');
+    const unauthorizedCard = document.getElementById('unauthorized-card');
+    const closeBtn = document.getElementById('close-admin-btn');
+    const unauthorizedCloseBtn = document.getElementById('unauthorized-close-btn');
+    const statusEl = document.getElementById('admin-status');
+    const subtitleEl = document.getElementById('admin-subtitle');
+    const refreshViewBtn = document.getElementById('refresh-view-btn');
+
+    const viewButtons = Array.from(document.querySelectorAll('.admin-tabs button[data-view]'));
+    const views = {
+      users: document.getElementById('view-users'),
+      bans: document.getElementById('view-bans'),
+      reports: document.getElementById('view-reports'),
+    };
+
+    const userSearchForm = document.getElementById('user-search-form');
+    const userSearchInput = document.getElementById('user-search-input');
+    const userSearchResults = document.getElementById('user-search-results');
+
+    const refreshBansBtn = document.getElementById('refresh-bans-btn');
+    const bansList = document.getElementById('bans-list');
+
+    const refreshReportsBtn = document.getElementById('refresh-reports-btn');
+    const reportsList = document.getElementById('reports-list');
+
+    let session = null;
+    let currentUser = null;
+    let currentView = new URLSearchParams(window.location.search).get('view') || 'users';
+    let lastUserQuery = '';
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message || '';
+      statusEl.classList.toggle('error', Boolean(message && isError));
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })[char]);
+    }
+
+    function formatRelative(iso) {
+      if (!iso) return '';
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return '';
+      const diff = Date.now() - date.getTime();
+      const minute = 60 * 1000;
+      const hour = 60 * minute;
+      const day = 24 * hour;
+      if (diff < minute) return 'moments ago';
+      if (diff < hour) return `${Math.floor(diff / minute)}m ago`;
+      if (diff < day) return `${Math.floor(diff / hour)}h ago`;
+      if (diff < day * 7) return `${Math.floor(diff / day)}d ago`;
+      return date.toLocaleDateString();
+    }
+
+    function showUnauthorized() {
+      adminMain.classList.add('hidden');
+      unauthorizedCard.classList.remove('hidden');
+    }
+
+    function showAdminUI() {
+      unauthorizedCard.classList.add('hidden');
+      adminMain.classList.remove('hidden');
+    }
+
+    function setActiveView(view) {
+      currentView = view;
+      viewButtons.forEach((button) => {
+        button.classList.toggle('active', button.dataset.view === view);
+      });
+      Object.entries(views).forEach(([key, section]) => {
+        section.classList.toggle('active', key === view);
+      });
+      const url = new URL(window.location.href);
+      url.searchParams.set('view', view);
+      window.history.replaceState({}, '', url);
+      if (view === 'users') {
+        subtitleEl.textContent = 'Search, review, or restrict user accounts.';
+        if (lastUserQuery) {
+          loadUserSearch(lastUserQuery);
+        } else {
+          userSearchResults.innerHTML =
+            '<p class="muted small">Search for a username, email, or user ID to begin.</p>';
+        }
+      } else if (view === 'bans') {
+        subtitleEl.textContent = 'Review banned accounts and restore access when appropriate.';
+        loadBannedUsers();
+      } else if (view === 'reports') {
+        subtitleEl.textContent = 'Review recent community reports submitted by users.';
+        loadReports();
+      }
+    }
+
+    function createUserEntry(profile) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'admin-item';
+
+      const header = document.createElement('div');
+      header.className = 'admin-item-header';
+
+      const title = document.createElement('strong');
+      title.textContent = profile.username || '(no username)';
+      header.appendChild(title);
+
+      const badgeRow = document.createElement('div');
+      badgeRow.className = 'admin-meta';
+      badgeRow.innerHTML = `
+        <span>User ID: ${escapeHtml(profile.id)}</span>
+        ${profile.email ? `<span>${escapeHtml(profile.email)}</span>` : ''}
+        ${profile.created_at ? `<span>Joined ${formatRelative(profile.created_at)}</span>` : ''}
+      `;
+      wrapper.appendChild(header);
+      wrapper.appendChild(badgeRow);
+
+      const actions = document.createElement('div');
+      actions.className = 'admin-actions-row';
+
+      const viewProfileBtn = document.createElement('button');
+      viewProfileBtn.type = 'button';
+      viewProfileBtn.className = 'outlined-btn';
+      viewProfileBtn.textContent = 'Open profile';
+      viewProfileBtn.addEventListener('click', () => {
+        window.open(`./?profile=${encodeURIComponent(profile.id)}#profile`, '_blank');
+      });
+      actions.appendChild(viewProfileBtn);
+
+      const banBtn = document.createElement('button');
+      banBtn.type = 'button';
+      banBtn.className = profile.banned ? 'outlined-btn' : 'pill-btn danger';
+      banBtn.textContent = profile.banned ? 'Unban user' : 'Ban user';
+      banBtn.addEventListener('click', async () => {
+        await toggleBanStatus(profile, !profile.banned, banBtn);
+      });
+      actions.appendChild(banBtn);
+
+      wrapper.appendChild(actions);
+      return wrapper;
+    }
+
+    async function toggleBanStatus(profile, ban, buttonEl) {
+      if (!buttonEl) return;
+      const originalLabel = buttonEl.textContent;
+      buttonEl.disabled = true;
+      buttonEl.textContent = ban ? 'Banning…' : 'Unbanning…';
+      setStatus('');
+      try {
+        const { error } = await supabase.from('profiles').update({ banned: ban }).eq('id', profile.id);
+        if (error) throw error;
+        profile.banned = ban;
+        buttonEl.className = ban ? 'outlined-btn' : 'pill-btn danger';
+        buttonEl.textContent = ban ? 'Unban user' : 'Ban user';
+        setStatus(ban ? 'User banned.' : 'User restored.');
+        if (currentView === 'bans') {
+          loadBannedUsers();
+        }
+      } catch (error) {
+        console.error('Ban toggle failed:', error);
+        buttonEl.textContent = originalLabel;
+        setStatus(error?.message || 'Unable to update user.', true);
+      } finally {
+        buttonEl.disabled = false;
+      }
+    }
+
+    async function loadUserSearch(query) {
+      const trimmed = query.trim();
+      lastUserQuery = trimmed;
+      if (!trimmed) {
+        userSearchResults.innerHTML =
+          '<p class="muted small">Enter at least 2 characters to search for a user.</p>';
+        return;
+      }
+      if (trimmed.length < 2) {
+        userSearchResults.innerHTML =
+          '<p class="muted small">Enter at least 2 characters to search for a user.</p>';
+        return;
+      }
+      setStatus('Searching users…');
+      userSearchResults.innerHTML = '';
+      try {
+        const queryBuilder = supabase
+          .from('profiles')
+          .select('id, username, email, banned, created_at')
+          .or(
+            `username.ilike.%${trimmed}%,email.ilike.%${trimmed}%,id.ilike.%${trimmed}%`,
+          )
+          .order('username', { ascending: true })
+          .limit(30);
+        const { data, error } = await queryBuilder;
+        if (error) throw error;
+        if (!data || !data.length) {
+          userSearchResults.innerHTML =
+            '<p class="muted small">No users found for that search.</p>';
+        } else {
+          const fragment = document.createDocumentFragment();
+          data.forEach((profile) => fragment.appendChild(createUserEntry(profile)));
+          userSearchResults.appendChild(fragment);
+        }
+        setStatus('');
+      } catch (error) {
+        console.error('User search failed:', error);
+        setStatus(error?.message || 'User search failed.', true);
+        userSearchResults.innerHTML =
+          '<p class="muted small">Unable to load results right now.</p>';
+      }
+    }
+
+    async function loadBannedUsers() {
+      setStatus('Loading banned users…');
+      bansList.innerHTML = '';
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, username, email, banned, created_at')
+          .eq('banned', true)
+          .order('username', { ascending: true });
+        if (error) throw error;
+        if (!data || !data.length) {
+          bansList.innerHTML = '<p class="muted small">No banned accounts.</p>';
+        } else {
+          const fragment = document.createDocumentFragment();
+          data.forEach((profile) => fragment.appendChild(createUserEntry(profile)));
+          bansList.appendChild(fragment);
+        }
+        setStatus('');
+      } catch (error) {
+        console.error('Bans load failed:', error);
+        setStatus(error?.message || 'Failed to load banned accounts.', true);
+        bansList.innerHTML =
+          '<p class="muted small">Unable to load banned accounts right now.</p>';
+      }
+    }
+
+    async function loadReports() {
+      setStatus('Loading reports…');
+      reportsList.innerHTML = '';
+      try {
+        const { data, error } = await supabase
+          .from('reports')
+          .select('id, type, status, created_at, reporter_id, target_id, details')
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (error) {
+          if (error.code === '42P01') {
+            reportsList.innerHTML =
+              '<p class="muted small">No reports table found. Configure the reports table in Supabase to surface community reports here.</p>';
+            setStatus('');
+            return;
+          }
+          throw error;
+        }
+        if (!data || !data.length) {
+          reportsList.innerHTML =
+            '<p class="muted small">No recent reports.</p>';
+        } else {
+          const fragment = document.createDocumentFragment();
+          data.forEach((report) => {
+            const item = document.createElement('div');
+            item.className = 'admin-item';
+            const header = document.createElement('div');
+            header.className = 'admin-item-header';
+            header.innerHTML = `
+              <strong>${escapeHtml(report.type || 'Report')}</strong>
+              <span class="badge">${escapeHtml(report.status || 'open')}</span>
+            `;
+            const meta = document.createElement('div');
+            meta.className = 'admin-meta';
+            meta.innerHTML = `
+              <span>ID ${escapeHtml(report.id)}</span>
+              ${report.created_at ? `<span>${formatRelative(report.created_at)}</span>` : ''}
+              ${report.reporter_id ? `<span>Reporter: ${escapeHtml(report.reporter_id)}</span>` : ''}
+              ${report.target_id ? `<span>Target: ${escapeHtml(report.target_id)}</span>` : ''}
+            `;
+            const details = document.createElement('p');
+            details.className = 'muted small';
+            details.textContent = report.details || 'No additional details provided.';
+            item.appendChild(header);
+            item.appendChild(meta);
+            item.appendChild(details);
+            fragment.appendChild(item);
+          });
+          reportsList.appendChild(fragment);
+        }
+        setStatus('');
+      } catch (error) {
+        console.error('Reports load failed:', error);
+        setStatus(error?.message || 'Unable to load reports.', true);
+        reportsList.innerHTML =
+          '<p class="muted small">Unable to load reports right now.</p>';
+      }
+    }
+
+    async function ensureAdmin() {
+      const { data } = await supabase.auth.getSession();
+      session = data.session;
+      currentUser = session?.user ?? null;
+      if (!currentUser || currentUser.id !== DEV_USER_ID) {
+        showUnauthorized();
+        return false;
+      }
+      showAdminUI();
+      return true;
+    }
+
+    closeBtn.addEventListener('click', () => {
+      if (window.opener) {
+        window.close();
+      } else if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.href = './';
+      }
+    });
+
+    unauthorizedCloseBtn.addEventListener('click', () => {
+      if (window.opener) {
+        window.close();
+      } else {
+        window.location.href = './';
+      }
+    });
+
+    viewButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        setActiveView(button.dataset.view);
+      });
+    });
+
+    refreshViewBtn.addEventListener('click', () => {
+      if (currentView === 'users') {
+        if (lastUserQuery) loadUserSearch(lastUserQuery);
+      } else if (currentView === 'bans') {
+        loadBannedUsers();
+      } else if (currentView === 'reports') {
+        loadReports();
+      }
+    });
+
+    userSearchForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      loadUserSearch(userSearchInput.value);
+    });
+
+    refreshBansBtn.addEventListener('click', () => {
+      loadBannedUsers();
+    });
+
+    refreshReportsBtn.addEventListener('click', () => {
+      loadReports();
+    });
+
+    async function init() {
+      setStatus('Authenticating…');
+      const access = await ensureAdmin();
+      if (!access) {
+        setStatus('');
+        return;
+      }
+      setActiveView(currentView);
+      setStatus('');
+    }
+
+    init().catch((error) => {
+      console.error('Admin tools initialization failed:', error);
+      setStatus(error?.message || 'Failed to initialize admin tools.', true);
+    });
+  </script>
+</body>
+</html>
