@@ -171,6 +171,18 @@ privacyEmailElems.forEach((el) => {
   }
 });
 
+function isDevUser(userId) {
+  return Boolean(userId && userId === DEV_USER_ID);
+}
+
+function assertAdminAccess() {
+  if (!isDevUser(currentUser?.id)) {
+    showSnackbar('Admin tools are restricted to the Kyotee team.');
+    return false;
+  }
+  return true;
+}
+
 function persistPrefs() {
   localStorage.setItem(
     PREFS_KEY,
@@ -2241,7 +2253,9 @@ function renderProfile() {
   renderProfileFriends(isOwnProfile);
   renderProfileFriendRequests(isOwnProfile);
   if (profileAdminCard) {
-    profileAdminCard.hidden = !(isOwnProfile && currentUser && currentUser.id === DEV_USER_ID);
+    const allowAdmin = Boolean(isOwnProfile && currentUser && isDevUser(currentUser.id));
+    profileAdminCard.hidden = !allowAdmin;
+    profileAdminCard.setAttribute('aria-hidden', allowAdmin ? 'false' : 'true');
   }
   if (profileEditActions) profileEditActions.hidden = !isOwnProfile;
   if (profileAvatarChangeBtn) profileAvatarChangeBtn.disabled = !isOwnProfile;
@@ -3347,16 +3361,19 @@ themeSelect.addEventListener('change', () => {
 
 if (adminUserSearchBtn) {
   adminUserSearchBtn.addEventListener('click', () => {
+    if (!assertAdminAccess()) return;
     showSnackbar('Open the admin dashboard in the Flutter app or Supabase.');
   });
 }
 if (adminBanDashboardBtn) {
   adminBanDashboardBtn.addEventListener('click', () => {
+    if (!assertAdminAccess()) return;
     showSnackbar('Ban management is not available in this preview.');
   });
 }
 if (adminReportsBtn) {
   adminReportsBtn.addEventListener('click', () => {
+    if (!assertAdminAccess()) return;
     showSnackbar('Reports are only viewable in the full app.');
   });
 }
