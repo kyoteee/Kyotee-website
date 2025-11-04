@@ -758,7 +758,7 @@ function buildCommentElement(comment) {
   }
   replyBtn.innerHTML = `
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path fill="currentColor" d="M10 18a1 1 0 0 1-1.71.71l-6-6a1 1 0 0 1 0-1.42l6-6A1 1 0 0 1 10 6v3h5c4.42 0 8 2.69 8 7.5a6.51 6.51 0 0 1-.64 2.89 1 1 0 0 1-1.82-.84A4.55 4.55 0 0 0 20 16.5C20 13.91 17.84 12 15 12h-6a1 1 0 0 1-1-1V7.41L3.41 12 8 16.59V14a1 1 0 0 1 1-1h6a3 3 0 0 1 0 6h-2a1 1 0 0 1 0-2h2a1 1 0 0 0 0-2h-5a1 1 0 0 1-1-1Z"></path>
+          <path fill="currentColor" d="M7.41 8.59 5 11h7a6 6 0 0 1 6 6v1a1 1 0 1 1-2 0v-1a4 4 0 0 0-4-4H5l2.41 2.41a1 1 0 0 1-1.42 1.42l-4.12-4.13a1.75 1.75 0 0 1 0-2.48l4.12-4.12a1 1 0 0 1 1.42 1.42Z"></path>
         </svg>
       `;
   replyBtn.addEventListener('click', () => setReplyTarget(comment));
