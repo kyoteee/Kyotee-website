@@ -1746,7 +1746,7 @@ async function fetchFriendSummary(friendId, profile) {
   const [lastMessageRes, unreadRes] = await Promise.all([
     supabase
       .from('messages')
-      .select('id, sender_id, receiver_id, content, image_url, created_at, read')
+      .select('id, sender_id, receiver_id, content, created_at, read')
       .or(
         `and(sender_id.eq.${currentUser.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${currentUser.id})`,
       )
@@ -1920,7 +1920,7 @@ async function loadConversation(friendId) {
     while (true) {
       const query = supabase
         .from('messages')
-        .select('id, sender_id, receiver_id, content, image_url, created_at, read')
+        .select('id, sender_id, receiver_id, content, created_at, read')
         .or(
           `and(sender_id.eq.${currentUser.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${currentUser.id})`,
         )
@@ -2018,10 +2018,8 @@ async function openChat(friend) {
   setAvatar(chatAvatar, friend.username, friend.avatarUrl);
   chatCard.hidden = false;
   resetChatAttachment();
-  if (!appState.conversations[friend.id]) {
-    messagesList.innerHTML = '<p class="muted centered">Loading conversation…</p>';
-    await loadConversation(friend.id);
-  }
+  messagesList.innerHTML = '<p class="muted centered">Loading conversation…</p>';
+  await loadConversation(friend.id);
   renderChat();
   msgInput.focus();
   await markConversationRead(friend.id);
