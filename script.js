@@ -23,6 +23,7 @@ const storedPrefs = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
 const MESSAGE_JSON_PREFIX = '__kyotee_msg__:';
 const LOCAL_MESSAGES_PREFIX = 'kyotee_preview_msgs_v1:';
 const MAX_AVATAR_FILE_SIZE = 5 * 1024 * 1024;
+const POST_CREATED_FLAG_KEY = 'kyotee_recent_post';
 
 const appState = {
   feedMode: storedPrefs.feedMode || 'latest',
@@ -654,6 +655,15 @@ function setAvatar(element, name, src) {
   } else {
     element.textContent = initial;
   }
+}
+
+function checkPostCreatedFlag() {
+  const flag = localStorage.getItem(POST_CREATED_FLAG_KEY);
+  if (!flag) return;
+  localStorage.removeItem(POST_CREATED_FLAG_KEY);
+  if (!currentUser) return;
+  ensureFeed(true).catch((error) => console.error('Feed refresh after post failed:', error));
+  showSnackbar('Post published.');
 }
 
 function getCommentState(postId) {
@@ -3038,6 +3048,7 @@ async function init() {
       console.error('Friend requests preload failed:', error),
     );
     ensureFeed(true).catch((error) => console.error('Feed preload failed:', error));
+    checkPostCreatedFlag();
   } else {
     showAuth(true);
   }
@@ -3079,7 +3090,11 @@ createPostFab.addEventListener('click', () => {
     showSnackbar('Sign in to create a post.');
     return;
   }
-  window.open('./create-post.html', 'kyoteeCreatePost', 'width=520,height=520');
+  if (window.matchMedia('(max-width: 720px)').matches) {
+    window.location.href = './create-post.html';
+  } else {
+    window.open('./create-post.html', 'kyoteeCreatePost', 'width=520,height=520');
+  }
 });
 
 searchInput.addEventListener('input', (event) => {
@@ -3357,6 +3372,16 @@ logoutBtn.addEventListener('click', async () => {
 
 themeSelect.addEventListener('change', () => {
   applyTheme(themeSelect.value);
+});
+
+window.addEventListener('pageshow', () => {
+  checkPostCreatedFlag();
+});
+
+window.addEventListener('storage', (event) => {
+  if (event.key === POST_CREATED_FLAG_KEY && event.newValue) {
+    checkPostCreatedFlag();
+  }
 });
 
 if (adminUserSearchBtn) {

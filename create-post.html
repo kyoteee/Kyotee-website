@@ -146,6 +146,7 @@
     const SUPABASE_ANON_KEY =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5dGVvZGhtcnNrZ3R0dHhvc2lrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNzEyMTMsImV4cCI6MjA3MDk0NzIxM30.O6ghjOLHmsmfeP78UWyive638WxpH-rsfqq0od6E4Fg';
     const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+    const POST_FLAG_KEY = 'kyotee_recent_post';
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
@@ -164,6 +165,7 @@
     const submitBtn = document.getElementById('submit-btn');
     const cancelBtn = document.getElementById('cancel-btn');
     const statusEl = document.getElementById('status');
+    const hasOpener = Boolean(window.opener);
 
     let session = null;
     let currentUser = null;
@@ -237,7 +239,13 @@
 
     cancelBtn.addEventListener('click', () => {
       if (submitBtn.disabled) return;
-      window.close();
+      if (hasOpener) {
+        window.close();
+      } else if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.href = './';
+      }
     });
 
     form.addEventListener('submit', async (event) => {
@@ -267,12 +275,20 @@
         });
         if (error) throw error;
 
-        setStatus('Post created! You can close this window.');
-        if (window.opener && typeof window.opener.postMessage === 'function') {
+        setStatus('Post created! Redirecting…');
+        if (hasOpener && typeof window.opener.postMessage === 'function') {
           window.opener.postMessage({ type: 'kyotee:post_created' }, '*');
+          setTimeout(() => window.close(), 600);
+        } else {
+          try {
+            localStorage.setItem(POST_FLAG_KEY, String(Date.now()));
+          } catch (_error) {
+            // ignore storage errors
+          }
+          setTimeout(() => {
+            window.location.href = './';
+          }, 600);
         }
-
-        setTimeout(() => window.close(), 800);
       } catch (error) {
         console.error('Create post failed:', error);
         setStatus(error?.message || 'Failed to create post.', true);
