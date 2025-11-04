@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kyotee — Preview</title>
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+  <meta name="theme-color" content="#7c3aed" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-theme="light">
+  <div id="auth-overlay" class="auth-overlay" hidden>
+    <div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <form id="login-form" class="auth-form" data-auth-panel="login">
+        <h2 id="auth-title">Sign in to Kyotee</h2>
+        <p class="muted small">Use the same credentials you use in the Flutter app.</p>
+        <div class="auth-field">
+          <label for="login-email">Email</label>
+          <input id="login-email" type="email" autocomplete="email" required />
+        </div>
+        <div class="auth-field">
+          <label for="login-password">Password</label>
+          <input id="login-password" type="password" autocomplete="current-password" required />
+        </div>
+        <p id="login-error" class="auth-error" hidden></p>
+        <button class="filled-btn full" type="submit" id="login-submit">Sign in</button>
+        <p class="auth-switch">Need an account? <button type="button" data-switch-to="register">Register</button></p>
+      </form>
+      <form id="register-form" class="auth-form" data-auth-panel="register" hidden>
+        <h2>Register</h2>
+        <p class="muted small">Sign up to explore the web preview connected to Supabase.</p>
+        <div class="auth-field">
+          <label for="register-email">Email</label>
+          <input id="register-email" type="email" autocomplete="email" required />
+        </div>
+        <div class="auth-field">
+          <label for="register-username">Username</label>
+          <input id="register-username" type="text" autocomplete="nickname" required />
+        </div>
+        <div class="auth-field">
+          <label for="register-password">Password</label>
+          <input id="register-password" type="password" autocomplete="new-password" required />
+        </div>
+        <div class="auth-field">
+          <label for="register-confirm">Confirm password</label>
+          <input id="register-confirm" type="password" autocomplete="new-password" required />
+        </div>
+        <div class="auth-field">
+          <label for="register-phone">Phone (optional)</label>
+          <input id="register-phone" type="tel" autocomplete="tel" placeholder="e.g. 925-555-1234" />
+        </div>
+        <div class="auth-field">
+          <label for="register-birthday">Birthday (optional)</label>
+          <input id="register-birthday" type="date" />
+        </div>
+        <p id="register-error" class="auth-error" hidden></p>
+        <p id="register-success" class="auth-success" hidden></p>
+        <button class="filled-btn full" type="submit" id="register-submit">Create account</button>
+        <p class="auth-switch">Already have an account? <button type="button" data-switch-to="login">Back to login</button></p>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-shell">
+    <main id="app">
+      <section id="screen-feed" class="screen active" aria-labelledby="feed-title">
+        <header class="app-bar">
+          <div class="app-bar-title">
+            <span class="app-bar-heading" id="feed-title">Feed</span>
+            <span class="app-bar-sub">See the latest posts</span>
+          </div>
+          <label class="app-bar-action" for="feed-mode">
+            <span>Mode</span>
+            <select id="feed-mode">
+              <option value="latest">Latest</option>
+              <option value="recommended">Recommended</option>
+            </select>
+          </label>
+        </header>
+        <div class="screen-body">
+          <div id="feed-list" class="stack"></div>
+        </div>
+        <button class="fab" type="button" id="create-post-fab" aria-label="Create post">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M12 4a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6V5a1 1 0 0 1 1-1Z"></path>
+          </svg>
+        </button>
+      </section>
+
+      <section id="screen-search" class="screen" aria-labelledby="search-title">
+        <header class="app-bar">
+          <div class="app-bar-title">
+            <span class="app-bar-heading" id="search-title">Search</span>
+            <span class="app-bar-sub">Find people and posts</span>
+          </div>
+        </header>
+        <div class="screen-body">
+          <article class="card">
+            <label class="field-label" for="search-input">Search Kyotee</label>
+            <div class="field">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="currentColor" d="M11 3a8 8 0 0 1 6.32 12.9l3.39 3.39a1 1 0 0 1-1.42 1.42l-3.39-3.39A8 8 0 1 1 11 3Zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Z"></path>
+              </svg>
+              <input id="search-input" placeholder="Search posts or users..." autocomplete="off" />
+            </div>
+            <p id="search-loading" class="muted small" hidden>Searching…</p>
+          </article>
+          <div id="search-results" class="stack"></div>
+        </div>
+      </section>
+
+      <section id="screen-messages" class="screen" aria-labelledby="messages-title">
+        <header class="app-bar">
+          <div class="app-bar-title">
+            <span class="app-bar-heading" id="messages-title">Messages</span>
+            <span class="app-bar-sub">Chat with friends</span>
+          </div>
+        </header>
+        <div class="screen-body two-column">
+          <article class="card" id="friends-card">
+            <h2>Friends</h2>
+            <p id="friends-loading" class="muted small">Loading friends…</p>
+            <div id="friends-list" class="stack"></div>
+          </article>
+          <article class="card chat-card" id="chat-card" hidden>
+            <div class="row">
+              <div class="avatar medium" id="chat-avatar"></div>
+              <div class="grow">
+                <strong id="chat-username">Friend</strong>
+                <div class="muted small" id="chat-sub">Select a friend to start chatting</div>
+              </div>
+            </div>
+            <div class="messages-list" id="messages-list"></div>
+            <form class="chat-input" id="chat-form">
+              <button type="button" class="icon-btn" id="chat-attach-btn" title="Attach image">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="currentColor" d="M16.5 6a3.5 3.5 0 0 1 3.5 3.5v7.25a4.25 4.25 0 1 1-8.5 0V9a2 2 0 1 1 4 0v6.5a.75.75 0 0 1-1.5 0V9h-1.5v6.5a2.25 2.25 0 1 0 4.5 0V9.5a5 5 0 1 0-10 0v7.25a6.75 6.75 0 1 0 13.5 0V9.5a3.5 3.5 0 0 1 3.5 3.5v7.25a0.75 0.75 0 0 1-1.5 0V13a5 5 0 0 0-5-5Z"></path>
+                </svg>
+              </button>
+              <input id="chat-image-input" type="file" accept="image/*" hidden />
+              <div class="chat-text-wrapper">
+                <img id="chat-image-preview" class="chat-image-preview" alt="Attachment preview" hidden />
+                <textarea id="msg-input" class="input" placeholder="Type a message..." autocomplete="off" rows="1"></textarea>
+              </div>
+              <button class="filled-btn" type="submit" id="send-msg">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="currentColor" d="M2.5 11.5 21 3l-4.7 18.4a1 1 0 0 1-1.8.26l-3.6-6.02-6.02-3.6a1 1 0 0 1-.26-1.8Z"></path>
+                </svg>
+                <span>Send</span>
+              </button>
+            </form>
+          </article>
+        </div>
+      </section>
+
+      <section id="screen-profile" class="screen" aria-labelledby="profile-title">
+        <header class="app-bar">
+          <div class="app-bar-title">
+            <span class="app-bar-heading" id="profile-title">Profile</span>
+            <span class="app-bar-sub">Manage your account</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="outlined-btn" type="button" id="logout-btn" hidden>Sign out</button>
+            <button class="icon-button" type="button" id="share-profile" title="Share profile">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="currentColor" d="M18 16a3 3 0 0 0-2.4 1.2l-6.2-3.1a3 3 0 0 0 0-2.2l6.2-3.1A3 3 0 1 0 15 7a3 3 0 0 0 .06.59L8.8 10.7a3 3 0 1 0 0 4.6l6.26 3.11A3 3 0 1 0 18 16Z"></path>
+              </svg>
+            </button>
+          </div>
+        </header>
+        <div class="screen-body">
+          <article class="card profile-card">
+            <div class="row">
+              <div class="avatar large" id="profile-avatar"></div>
+              <div class="grow">
+                <h2 id="profile-username">You</h2>
+                <p class="muted" id="profile-email">you@example.com</p>
+                <p class="muted small" id="profile-phone" hidden></p>
+                <div id="profile-friend-actions" class="friend-actions" hidden></div>
+                <div class="profile-edit-actions" id="profile-edit-actions" hidden>
+                  <button type="button" class="pill-btn" id="profile-avatar-change">Change avatar</button>
+                  <button type="button" class="pill-btn" id="profile-username-edit">Edit username</button>
+                  <button type="button" class="pill-btn" id="profile-phone-edit">Edit phone</button>
+                </div>
+              </div>
+            </div>
+            <input id="profile-avatar-input" type="file" accept="image/*" hidden />
+          </article>
+          <article class="card">
+            <h2>Friends</h2>
+            <div id="profile-friends-empty" class="muted small">No friends yet.</div>
+            <div id="profile-friends" class="stack"></div>
+          </article>
+          <article class="card" id="profile-friend-requests-card" hidden>
+            <h2>Friend requests</h2>
+            <div id="profile-friend-requests-empty" class="muted small">No pending requests.</div>
+            <div class="stack" id="profile-friend-requests-incoming-wrapper" hidden>
+              <strong>Incoming</strong>
+              <div id="profile-friend-requests-incoming" class="stack"></div>
+            </div>
+            <div class="stack" id="profile-friend-requests-outgoing-wrapper" hidden>
+              <strong>Outgoing</strong>
+              <div id="profile-friend-requests-outgoing" class="stack"></div>
+            </div>
+          </article>
+          <article class="card">
+            <h2>Preferences</h2>
+            <div class="row">
+              <label class="field-label" for="theme-select" style="width: 120px;">Theme</label>
+              <select id="theme-select" class="input" style="max-width: 180px;">
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+                <option value="system">System</option>
+              </select>
+            </div>
+            <div class="row" style="margin-top: 12px; align-items: center;">
+              <label class="field-label" for="engagement-toggle" style="width: 120px;">Slider likes</label>
+              <label class="switch">
+                <input id="engagement-toggle" type="checkbox" />
+                <span class="switch-indicator"></span>
+              </label>
+              <span class="muted small" id="engagement-toggle-label">Off</span>
+            </div>
+          </article>
+          <article class="card">
+            <h2>Data &amp; privacy</h2>
+            <div class="stack">
+              <p class="muted small">
+                Manage the data associated with your Kyotee account or request removal.
+              </p>
+              <div class="privacy-actions">
+                <button type="button" class="pill-btn" id="privacy-policy-btn">Privacy policy</button>
+                <button type="button" class="pill-btn" id="manage-data-btn">Manage my data</button>
+                <button type="button" class="pill-btn danger" id="delete-account-btn">Delete account</button>
+              </div>
+              <p class="muted small">
+                Need help? Email <span class="privacy-email"></span>.
+              </p>
+            </div>
+          </article>
+          <article class="card" id="profile-admin-card" hidden>
+            <h2>Admin Tools</h2>
+            <div class="stack">
+              <button type="button" class="pill-btn" id="admin-user-search">Moderate users</button>
+              <button type="button" class="pill-btn" id="admin-ban-dashboard">Ban dashboard</button>
+              <button type="button" class="pill-btn" id="admin-reports">View reports</button>
+            </div>
+          </article>
+          <article class="card">
+            <h2>Posts</h2>
+            <div id="my-posts" class="stack"></div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Main navigation">
+      <button type="button" data-screen="feed" class="active" aria-current="page">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M12 3 3 10.8V20a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-4.5h2V20a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-9.2L12 3Z"></path>
+        </svg>
+        <span>Feed</span>
+      </button>
+      <button type="button" data-screen="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M11 3a8 8 0 0 1 6.32 12.9l3.39 3.39a1 1 0 0 1-1.42 1.42l-3.39-3.39A8 8 0 1 1 11 3Zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Z"></path>
+        </svg>
+        <span>Search</span>
+      </button>
+      <button type="button" data-screen="messages">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M5 4h14a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-3.38l-3.12 3.12a1 1 0 0 1-1.7-.7V16H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path>
+        </svg>
+        <span>Messages</span>
+      </button>
+      <button type="button" data-screen="profile">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M12 4a4.5 4.5 0 1 1-4.5 4.5A4.5 4.5 0 0 1 12 4Zm0 10c4 0 7.5 2 7.5 4.5V20a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-1.5C4.5 16 8 14 12 14Z"></path>
+        </svg>
+        <span>Profile</span>
+      </button>
+    </nav>
+  </div>
+
+  <div id="comments-overlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal-surface" role="dialog" aria-modal="true" aria-labelledby="comments-modal-title">
+      <header class="comments-header">
+        <div class="comments-title">
+          <h2 id="comments-modal-title">Comments</h2>
+          <p id="comments-modal-subtitle">Join the conversation</p>
+        </div>
+        <button type="button" class="icon-button" id="comments-close-btn" aria-label="Close comments">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="m12 10.586-4.95-4.95a1 1 0 0 0-1.414 1.414L10.586 12l-4.95 4.95a1 1 0 1 0 1.414 1.414L12 13.414l4.95 4.95a1 1 0 0 0 1.414-1.414L13.414 12l4.95-4.95A1 1 0 1 0 16.95 5.636L12 10.586Z"></path>
+          </svg>
+        </button>
+      </header>
+      <div class="comments-body" id="comments-body">
+        <div id="comments-post-preview" class="comment-item" hidden></div>
+        <div id="comments-list"></div>
+      </div>
+      <div class="comments-input" id="comments-input-section">
+        <form id="comment-form" class="stack" autocomplete="off">
+          <label class="field-label" for="comment-textarea">Add a comment</label>
+          <div id="reply-indicator" class="reply-indicator" hidden>
+            <span id="reply-indicator-text">Replying to</span>
+            <button type="button" id="reply-indicator-cancel">Cancel</button>
+          </div>
+          <textarea id="comment-textarea" placeholder="Share your thoughts…" required></textarea>
+          <div class="actions">
+            <button type="submit" class="filled-btn" id="comment-submit">Post comment</button>
+          </div>
+        </form>
+        <p class="muted small" id="comments-signin-hint" hidden>
+          Sign in to join the conversation.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="snackbar" id="snackbar" role="status" aria-live="polite"></div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
