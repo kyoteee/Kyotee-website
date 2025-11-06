@@ -144,6 +144,34 @@
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5dGVvZGhtcnNrZ3R0dHhvc2lrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNzEyMTMsImV4cCI6MjA3MDk0NzIxM30.O6ghjOLHmsmfeP78UWyive638WxpH-rsfqq0od6E4Fg';
     const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
     const POST_FLAG_KEY = 'kyotee_recent_post';
+    const POST_REVIEW_NOTICE_KEY = 'kyotee_review_notice';
+    const NSFW_PATTERNS = [
+      { pattern: /\bnsfw\b/i, reason: 'Marked as NSFW' },
+      { pattern: /\b18\+\b/i, reason: 'References 18+' },
+      { pattern: /\bonlyfans\b/i, reason: 'Contains OnlyFans reference' },
+      { pattern: /\bnudes?\b/i, reason: 'Mentions nudes' },
+      { pattern: /\b(lewd|explicit|erotic)\b/i, reason: 'Explicit content reference' },
+      { pattern: /\b(porn|porno|pornography)\b/i, reason: 'Pornographic reference' },
+      { pattern: /\b(sex|sexual|xxx|fetish|kink|bdsm)\b/i, reason: 'Sexual content reference' },
+      { pattern: /\b(boobs?|breasts?|nipple|areola)\b/i, reason: 'Contains explicit anatomy' },
+      { pattern: /\b(dick|penis|cock|pussy|vagina|anus|buttplug)\b/i, reason: 'Contains explicit anatomy' },
+      { pattern: /spicy\s*content/i, reason: 'Spicy content indicator' },
+      { pattern: /🍑|🍆|💦|🔞/u, reason: 'Contains explicit emoji' },
+      { pattern: /\bgraphic\s+violence\b/i, reason: 'Graphic violence reference' },
+      { pattern: /\bgore\b/i, reason: 'Graphic gore reference' },
+      { pattern: /\bbloodbath\b/i, reason: 'Graphic gore reference' },
+      { pattern: /\bbloodied\b/i, reason: 'Graphic violence reference' },
+      { pattern: /\bdisembowel(ed|ment)?\b/i, reason: 'Graphic violence reference' },
+      { pattern: /\bdecapitat(ed|ion)\b/i, reason: 'Graphic violence reference' },
+      { pattern: /\bbehead(ed|ing)\b/i, reason: 'Graphic violence reference' },
+      { pattern: /\bdismember(ed|ment)\b/i, reason: 'Graphic violence reference' },
+      { pattern: /\btorture\b/i, reason: 'Torture content reference' },
+      { pattern: /\bexecution\b/i, reason: 'Execution content reference' },
+      { pattern: /\bhomicide\b/i, reason: 'Homicide content reference' },
+      { pattern: /\bmurder(ed|ous)?\b/i, reason: 'Murder content reference' },
+      { pattern: /\bkilled\b/i, reason: 'Murder content reference' },
+      { pattern: /\bshooting\b/i, reason: 'Violent incident reference' }
+    ];
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
@@ -203,15 +231,33 @@
       return true;
     }
 
-    async function uploadImage(file, userId) {
+    async function uploadImage(file, userId, { prefix = 'post_images' } = {}) {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const path = `post_images/${userId}/${Date.now()}.${ext}`;
+      const path = `${prefix}/${userId}/${Date.now()}.${ext}`;
       const { error } = await supabase.storage
         .from('post_images')
         .upload(path, file, { cacheControl: '3600', upsert: false });
       if (error) throw error;
       const { data } = supabase.storage.from('post_images').getPublicUrl(path);
       return data.publicUrl;
+    }
+
+    function detectNsfwSignals(text, fileName) {
+      const reasons = new Set();
+      const inspect = (value) => {
+        if (!value) return;
+        NSFW_PATTERNS.forEach(({ pattern, reason }) => {
+          if (pattern.test(value)) reasons.add(reason);
+        });
+      };
+      inspect(text);
+      inspect(fileName);
+      return Array.from(reasons);
+    }
+
+    async function queueForModeration(payload) {
+      const { error } = await supabase.from('post_review_queue').insert(payload);
+      if (error) throw error;
     }
 
     attachBtn.addEventListener('click', () => imageInput.click());
@@ -259,32 +305,73 @@
 
       try {
         setLoading(true);
-        setStatus('Publishing post…');
+        const nsfwReasons = detectNsfwSignals(text.toLowerCase(), attachmentFile?.name?.toLowerCase());
+        const flagged = nsfwReasons.length > 0;
+        setStatus(flagged ? 'Sending to moderation…' : 'Publishing post…');
 
         if (attachmentFile) {
-          attachmentUrl = await uploadImage(attachmentFile, currentUser.id);
+          attachmentUrl = await uploadImage(attachmentFile, currentUser.id, {
+            prefix: flagged ? 'post_review_queue' : 'post_images',
+          });
         }
 
-        const { error } = await supabase.from('posts').insert({
-          user_id: currentUser.id,
-          content: text || null,
-          image_url: attachmentUrl || null,
-        });
-        if (error) throw error;
-
-        setStatus('Post created! Redirecting…');
-        if (hasOpener && typeof window.opener.postMessage === 'function') {
-          window.opener.postMessage({ type: 'kyotee:post_created' }, '*');
-          setTimeout(() => window.close(), 600);
-        } else {
+        if (flagged) {
           try {
-            localStorage.setItem(POST_FLAG_KEY, String(Date.now()));
-          } catch (_error) {
-            // ignore storage errors
+            await queueForModeration({
+              user_id: currentUser.id,
+              content: text || null,
+              image_url: attachmentUrl || null,
+              reasons: nsfwReasons,
+              status: 'pending',
+              submitted_via: 'web_preview',
+            });
+          } catch (queueError) {
+            console.error('Moderation queue insert failed:', queueError);
+            setStatus(
+              'We could not queue this post for moderation. Please try again later or contact support.',
+              true,
+            );
+            return;
+          }
+
+          setStatus('Your post was flagged, it will be reviewed within a few days.');
+          try {
+            localStorage.setItem(POST_REVIEW_NOTICE_KEY, String(Date.now()));
+          } catch (_storageError) {
+            // ignore storage issue
           }
           setTimeout(() => {
-            window.location.href = './';
-          }, 600);
+            if (hasOpener) {
+              window.close();
+            } else if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              window.location.href = './';
+            }
+          }, 1000);
+          return;
+        } else {
+          const { error } = await supabase.from('posts').insert({
+            user_id: currentUser.id,
+            content: text || null,
+            image_url: attachmentUrl || null,
+          });
+          if (error) throw error;
+
+          setStatus('Post created! Redirecting…');
+          if (hasOpener && typeof window.opener.postMessage === 'function') {
+            window.opener.postMessage({ type: 'kyotee:post_created' }, '*');
+            setTimeout(() => window.close(), 600);
+          } else {
+            try {
+              localStorage.setItem(POST_FLAG_KEY, String(Date.now()));
+            } catch (_error) {
+              // ignore storage errors
+            }
+            setTimeout(() => {
+              window.location.href = './';
+            }, 600);
+          }
         }
       } catch (error) {
         console.error('Create post failed:', error);

@@ -457,7 +457,7 @@
       try {
         const { data, error } = await supabase
           .from('reports')
-          .select('id, type, status, created_at, reporter_id, target_id, details')
+          .select('id, type, status, created_at, reporter_id, target_id, post_id, details')
           .order('created_at', { ascending: false })
           .limit(50);
         if (error) {
@@ -490,6 +490,7 @@
               ${report.created_at ? `<span>${formatRelative(report.created_at)}</span>` : ''}
               ${report.reporter_id ? `<span>Reporter: ${escapeHtml(report.reporter_id)}</span>` : ''}
               ${report.target_id ? `<span>Target: ${escapeHtml(report.target_id)}</span>` : ''}
+              ${report.post_id ? `<span>Post: ${escapeHtml(report.post_id)}</span>` : ''}
             `;
             const details = document.createElement('p');
             details.className = 'muted small';

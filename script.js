@@ -24,6 +24,7 @@ const MESSAGE_JSON_PREFIX = '__kyotee_msg__:';
 const LOCAL_MESSAGES_PREFIX = 'kyotee_preview_msgs_v1:';
 const MAX_AVATAR_FILE_SIZE = 5 * 1024 * 1024;
 const POST_CREATED_FLAG_KEY = 'kyotee_recent_post';
+const POST_REVIEW_NOTICE_KEY = 'kyotee_review_notice';
 
 const appState = {
   feedMode: storedPrefs.feedMode || 'latest',
@@ -64,6 +65,7 @@ let chatAttachmentPreviewUrl = null;
 let activeCommentsPost = null;
 let activeReplyTarget = null;
 let replyInFlight = false;
+let reportInFlight = false;
 
 const authOverlay = document.getElementById('auth-overlay');
 const loginForm = document.getElementById('login-form');
@@ -140,6 +142,7 @@ const adminUserSearchBtn = document.getElementById('admin-user-search');
 const adminBanDashboardBtn = document.getElementById('admin-ban-dashboard');
 const adminReportsBtn = document.getElementById('admin-reports');
 const shareProfileBtn = document.getElementById('share-profile');
+const flaggedPostsBtn = document.getElementById('flagged-posts-btn');
 const logoutBtn = document.getElementById('logout-btn');
 
 const themeSelect = document.getElementById('theme-select');
@@ -191,6 +194,16 @@ function openAdminTool(view = 'users') {
     window.location.href = target;
   } else {
     window.open(target, 'kyoteeAdminTool', 'width=960,height=720');
+  }
+}
+
+function openFlaggedPosts() {
+  if (!assertAdminAccess()) return;
+  const target = './flagged-posts.html';
+  if (window.matchMedia('(max-width: 720px)').matches) {
+    window.location.href = target;
+  } else {
+    window.open(target, 'kyoteeFlaggedPosts', 'width=960,height=720');
   }
 }
 
@@ -674,6 +687,13 @@ function checkPostCreatedFlag() {
   if (!currentUser) return;
   ensureFeed(true).catch((error) => console.error('Feed refresh after post failed:', error));
   showSnackbar('Post published.');
+}
+
+function checkPostReviewFlag() {
+  const flag = localStorage.getItem(POST_REVIEW_NOTICE_KEY);
+  if (!flag) return;
+  localStorage.removeItem(POST_REVIEW_NOTICE_KEY);
+  showSnackbar('Your post was flagged, it will be reviewed within a few days.');
 }
 
 function handleDeepLinks() {
@@ -1434,6 +1454,52 @@ async function toggleReaction(postId, reaction) {
   );
 }
 
+async function reportPost(post) {
+  if (!currentUser) {
+    showSnackbar('Sign in to report posts.');
+    return;
+  }
+  if (!post || !post.id) return;
+  if (post.userId === currentUser.id) {
+    showSnackbar('You cannot report your own post.');
+    return;
+  }
+  if (reportInFlight) return;
+  let reason = prompt('Tell us what is wrong with this post (optional):');
+  if (reason === null) return;
+  reason = reason.trim();
+  const payload = {
+    type: 'post',
+    status: 'open',
+    reporter_id: currentUser.id,
+    target_id: post.userId,
+    post_id: post.id,
+    details: reason || null,
+  };
+  reportInFlight = true;
+  showSnackbar('Submitting report…');
+  try {
+    const { error } = await supabase.from('reports').insert(payload);
+    if (error) {
+      if (error.code === '42P01') {
+        showSnackbar('Reports table not configured yet.');
+        return;
+      }
+      if (error.code === '42703') {
+        showSnackbar('Reports table is missing expected columns.');
+        return;
+      }
+      throw error;
+    }
+    showSnackbar('Thanks. Your report has been submitted.');
+  } catch (error) {
+    console.error('Report post failed:', error);
+    showSnackbar(error?.message || 'Failed to submit report.');
+  } finally {
+    reportInFlight = false;
+  }
+}
+
 async function loadFeed() {
   feedList.innerHTML = '';
   if (!currentUser) {
@@ -1610,6 +1676,19 @@ function renderFeed() {
 
     footer.appendChild(commentBtn);
     footer.appendChild(shareBtn);
+    if (!currentUser || post.userId !== currentUser.id) {
+      const reportBtn = document.createElement('button');
+      reportBtn.type = 'button';
+      reportBtn.className = 'chip dislike';
+      reportBtn.innerHTML = `
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M12 2a2 2 0 0 0-2 2v7a2 2 0 1 0 4 0V4a2 2 0 0 0-2-2Zm0 18a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5Z"></path>
+          </svg>
+          Report
+        `;
+      reportBtn.addEventListener('click', () => reportPost(post));
+      footer.appendChild(reportBtn);
+    }
     if (currentUser && post.userId === currentUser.id) {
       const deleteBtn = document.createElement('button');
       deleteBtn.type = 'button';
@@ -2307,6 +2386,11 @@ function renderProfile() {
     const allowAdmin = Boolean(isOwnProfile && currentUser && isDevUser(currentUser.id));
     profileAdminCard.hidden = !allowAdmin;
     profileAdminCard.setAttribute('aria-hidden', allowAdmin ? 'false' : 'true');
+  }
+  if (flaggedPostsBtn) {
+    const allowFlagged = Boolean(isOwnProfile && currentUser && isDevUser(currentUser.id));
+    flaggedPostsBtn.hidden = !allowFlagged;
+    flaggedPostsBtn.setAttribute('aria-hidden', allowFlagged ? 'false' : 'true');
   }
   if (profileEditActions) profileEditActions.hidden = !isOwnProfile;
   if (profileAvatarChangeBtn) profileAvatarChangeBtn.disabled = !isOwnProfile;
@@ -3064,6 +3148,7 @@ async function init() {
       ensureFeed(true).catch((error) => console.error('Feed preload failed:', error));
       handleDeepLinks();
       checkPostCreatedFlag();
+      checkPostReviewFlag();
     } else {
       showAuth(true);
     }
@@ -3093,6 +3178,7 @@ async function init() {
     ensureFeed(true).catch((error) => console.error('Feed preload failed:', error));
     handleDeepLinks();
     checkPostCreatedFlag();
+    checkPostReviewFlag();
   } else {
     showAuth(true);
   }
@@ -3397,6 +3483,12 @@ shareProfileBtn.addEventListener('click', () => {
   showSnackbar('Profile link copied');
 });
 
+if (flaggedPostsBtn) {
+  flaggedPostsBtn.addEventListener('click', () => {
+    openFlaggedPosts();
+  });
+}
+
 logoutBtn.addEventListener('click', async () => {
   try {
     await supabase.auth.signOut({ scope: 'local' });
@@ -3420,11 +3512,15 @@ themeSelect.addEventListener('change', () => {
 
 window.addEventListener('pageshow', () => {
   checkPostCreatedFlag();
+  checkPostReviewFlag();
 });
 
 window.addEventListener('storage', (event) => {
   if (event.key === POST_CREATED_FLAG_KEY && event.newValue) {
     checkPostCreatedFlag();
+  }
+  if (event.key === POST_REVIEW_NOTICE_KEY && event.newValue) {
+    checkPostReviewFlag();
   }
 });
 

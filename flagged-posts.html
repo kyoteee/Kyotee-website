@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kyotee — Flagged Posts</title>
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+    }
+    .flagged-card {
+      width: min(960px, 100%);
+      padding: 28px 26px;
+      gap: 20px;
+    }
+    .flagged-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .flagged-header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+    .flagged-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .flagged-actions button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .flagged-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .flagged-item {
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 16px;
+      background: var(--surface-alt);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .flagged-item-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .flagged-meta {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .flagged-content {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 15px;
+    }
+    .flagged-image {
+      max-width: 100%;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      background: var(--surface);
+    }
+    .flagged-reasons {
+      font-size: 13px;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .flagged-reasons span {
+      background: rgba(124, 58, 237, 0.15);
+      color: var(--primary-strong);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-weight: 600;
+    }
+    .flagged-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .status {
+      font-size: 14px;
+      color: var(--muted);
+      min-height: 20px;
+    }
+    .status.error {
+      color: var(--danger);
+    }
+    .hidden {
+      display: none !important;
+    }
+    @media (max-width: 720px) {
+      body {
+        padding: 16px;
+      }
+      .flagged-card {
+        padding: 24px 20px;
+      }
+      .flagged-actions {
+        width: 100%;
+        justify-content: stretch;
+      }
+      .flagged-actions button,
+      .flagged-buttons button {
+        flex: 1;
+        justify-content: center;
+      }
+    }
+  </style>
+  <script>
+    (function () {
+      const PREFS_KEY = 'kyotee_preview_prefs_v2';
+      const storedPrefs = (() => {
+        try {
+          return JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+        } catch (_error) {
+          return {};
+        }
+      })();
+      const pref = storedPrefs.themePreference || 'light';
+      const resolveTheme = () => {
+        if (pref === 'system') {
+          return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+        }
+        return pref;
+      };
+      document.documentElement.dataset.theme = resolveTheme();
+      if (pref === 'system' && window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+          document.documentElement.dataset.theme = resolveTheme();
+        });
+      }
+    })();
+  </script>
+</head>
+<body>
+  <main id="flagged-main" class="card flagged-card hidden" aria-hidden="true">
+    <header class="flagged-header">
+      <div>
+        <h1>Flagged posts</h1>
+        <p class="muted small" id="flagged-subtitle">Review and moderate posts that were flagged as 18+.</p>
+      </div>
+      <div class="flagged-actions">
+        <button type="button" class="outlined-btn" id="refresh-flagged-btn">Refresh</button>
+        <button type="button" class="outlined-btn" id="close-flagged-btn">Done</button>
+      </div>
+    </header>
+    <section id="flagged-list" class="flagged-list"></section>
+    <p id="flagged-status" class="status"></p>
+  </main>
+
+  <div id="flagged-unauthorized" class="card flagged-card hidden" aria-hidden="true">
+    <h1>Access restricted</h1>
+    <p class="muted">Only the Kyotee admin account can review flagged posts.</p>
+    <button type="button" class="outlined-btn" id="flagged-unauthorized-close">Back</button>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.43.4/+esm';
+
+    const SUPABASE_URL = 'https://xyteodhmrskgtttxosik.supabase.co';
+    const SUPABASE_ANON_KEY =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5dGVvZGhtcnNrZ3R0dHhvc2lrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNzEyMTMsImV4cCI6MjA3MDk0NzIxM30.O6ghjOLHmsmfeP78UWyive638WxpH-rsfqq0od6E4Fg';
+    const DEV_USER_ID = 'a41f959f-fbfe-41ae-8daf-40beaa876635';
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        detectSessionInUrl: true,
+        autoRefreshToken: true,
+        storage: localStorage,
+      },
+    });
+
+    const mainEl = document.getElementById('flagged-main');
+    const unauthorizedEl = document.getElementById('flagged-unauthorized');
+    const flaggedListEl = document.getElementById('flagged-list');
+    const statusEl = document.getElementById('flagged-status');
+    const refreshBtn = document.getElementById('refresh-flagged-btn');
+    const closeBtn = document.getElementById('close-flagged-btn');
+    const unauthorizedCloseBtn = document.getElementById('flagged-unauthorized-close');
+    const subtitleEl = document.getElementById('flagged-subtitle');
+
+    let session = null;
+    let currentUser = null;
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message || '';
+      statusEl.classList.toggle('error', Boolean(message && isError));
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })[char]);
+    }
+
+    function formatRelative(iso) {
+      if (!iso) return '';
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return '';
+      const diff = Date.now() - date.getTime();
+      const minute = 60 * 1000;
+      const hour = 60 * minute;
+      const day = 24 * hour;
+      if (diff < minute) return 'moments ago';
+      if (diff < hour) return `${Math.floor(diff / minute)}m ago`;
+      if (diff < day) return `${Math.floor(diff / hour)}h ago`;
+      if (diff < day * 7) return `${Math.floor(diff / day)}d ago`;
+      return date.toLocaleDateString();
+    }
+
+    function parseReasons(value) {
+      if (!value) return [];
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed)) return parsed;
+        } catch (_error) {
+          return value
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+        }
+      }
+      return [];
+    }
+
+    function showUnauthorized() {
+      mainEl.classList.add('hidden');
+      mainEl.setAttribute('aria-hidden', 'true');
+      unauthorizedEl.classList.remove('hidden');
+      unauthorizedEl.setAttribute('aria-hidden', 'false');
+    }
+
+    function showMain() {
+      unauthorizedEl.classList.add('hidden');
+      unauthorizedEl.setAttribute('aria-hidden', 'true');
+      mainEl.classList.remove('hidden');
+      mainEl.setAttribute('aria-hidden', 'false');
+    }
+
+    async function ensureAdmin() {
+      const { data } = await supabase.auth.getSession();
+      session = data.session;
+      currentUser = session?.user ?? null;
+      if (!currentUser || currentUser.id !== DEV_USER_ID) {
+        showUnauthorized();
+        setStatus('');
+        return false;
+      }
+      showMain();
+      return true;
+    }
+
+    async function fetchProfiles(ids) {
+      if (!ids.length) return new Map();
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, username, email')
+          .in('id', ids);
+        if (error) throw error;
+        const map = new Map();
+        (data || []).forEach((profile) => {
+          map.set(profile.id, profile);
+        });
+        return map;
+      } catch (error) {
+        console.error('Profile lookup failed:', error);
+        return new Map();
+      }
+    }
+
+    async function loadFlaggedPosts() {
+      setStatus('Loading flagged posts…');
+      flaggedListEl.innerHTML = '';
+      try {
+        let query = supabase
+          .from('post_review_queue')
+          .select('id, user_id, content, image_url, reasons, status, submitted_via, created_at')
+          .order('created_at', { ascending: false })
+          .limit(100);
+        let { data, error } = await query;
+        if (error) {
+          if (error.code === '42P01') {
+            setStatus(
+              'No moderation queue found. Create a post_review_queue table in Supabase to review flagged posts.',
+              true,
+            );
+            return;
+          }
+          throw error;
+        }
+        data = (data || []).filter((entry) => !entry.status || entry.status === 'pending');
+        if (!data.length) {
+          flaggedListEl.innerHTML = '<p class="muted small">No flagged posts waiting for review.</p>';
+          setStatus('');
+          return;
+        }
+        const userIds = Array.from(new Set(data.map((entry) => entry.user_id).filter(Boolean)));
+        const profilesMap = await fetchProfiles(userIds);
+        const fragment = document.createDocumentFragment();
+        data.forEach((entry) => {
+          fragment.appendChild(buildFlaggedItem(entry, profilesMap.get(entry.user_id)));
+        });
+        flaggedListEl.appendChild(fragment);
+        const countText = data.length === 1 ? '1 post awaiting review' : `${data.length} posts awaiting review`;
+        subtitleEl.textContent = `Review and moderate posts that were flagged as 18+. ${countText}.`;
+        setStatus('');
+      } catch (error) {
+        console.error('Flagged posts load failed:', error);
+        setStatus(error?.message || 'Unable to load flagged posts.', true);
+      }
+    }
+
+    function buildFlaggedItem(entry, profile) {
+      const wrapper = document.createElement('article');
+      wrapper.className = 'flagged-item';
+      const header = document.createElement('div');
+      header.className = 'flagged-item-header';
+      const title = document.createElement('strong');
+      title.textContent = profile?.username || profile?.email || entry.user_id || 'Unknown user';
+      const statusBadge = document.createElement('span');
+      statusBadge.className = 'muted small';
+      statusBadge.textContent = entry.status ? entry.status.toUpperCase() : 'PENDING';
+      header.appendChild(title);
+      header.appendChild(statusBadge);
+
+      const meta = document.createElement('div');
+      meta.className = 'flagged-meta';
+      meta.innerHTML = `
+        <span>User ID: ${escapeHtml(entry.user_id || 'unknown')}</span>
+        <span>Flagged ${escapeHtml(formatRelative(entry.created_at))}</span>
+        ${entry.submitted_via ? `<span>Source: ${escapeHtml(entry.submitted_via)}</span>` : ''}
+      `;
+
+      const content = document.createElement('div');
+      content.className = 'flagged-content';
+      content.textContent = entry.content || '(no message)';
+
+      const reasons = parseReasons(entry.reasons);
+      let reasonsEl = null;
+      if (reasons.length) {
+        reasonsEl = document.createElement('div');
+        reasonsEl.className = 'flagged-reasons';
+        reasons.forEach((reason) => {
+          const chip = document.createElement('span');
+          chip.textContent = reason;
+          reasonsEl.appendChild(chip);
+        });
+      }
+
+      let imageEl = null;
+      if (entry.image_url) {
+        imageEl = document.createElement('img');
+        imageEl.className = 'flagged-image';
+        imageEl.src = entry.image_url;
+        imageEl.alt = 'Flagged post image';
+      }
+
+      const buttons = document.createElement('div');
+      buttons.className = 'flagged-buttons';
+
+      const approveBtn = document.createElement('button');
+      approveBtn.type = 'button';
+      approveBtn.className = 'filled-btn';
+      approveBtn.textContent = 'Approve & publish';
+      approveBtn.addEventListener('click', () => approvePost(entry, approveBtn));
+
+      const rejectBtn = document.createElement('button');
+      rejectBtn.type = 'button';
+      rejectBtn.className = 'outlined-btn';
+      rejectBtn.textContent = 'Reject';
+      rejectBtn.addEventListener('click', () => rejectPost(entry, rejectBtn));
+
+      const openProfileBtn = document.createElement('button');
+      openProfileBtn.type = 'button';
+      openProfileBtn.className = 'outlined-btn';
+      openProfileBtn.textContent = 'Open profile';
+      openProfileBtn.addEventListener('click', () => {
+        window.open(`./?profile=${encodeURIComponent(entry.user_id)}#profile`, '_blank');
+      });
+
+      buttons.appendChild(approveBtn);
+      buttons.appendChild(rejectBtn);
+      buttons.appendChild(openProfileBtn);
+
+      wrapper.appendChild(header);
+      wrapper.appendChild(meta);
+      wrapper.appendChild(content);
+      if (reasonsEl) wrapper.appendChild(reasonsEl);
+      if (imageEl) wrapper.appendChild(imageEl);
+      wrapper.appendChild(buttons);
+
+      return wrapper;
+    }
+
+    async function approvePost(entry, button) {
+      if (!button) return;
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Approving…';
+      setStatus('');
+      try {
+        const { error: insertError } = await supabase.from('posts').insert({
+          user_id: entry.user_id,
+          content: entry.content || null,
+          image_url: entry.image_url || null,
+        });
+        if (insertError) throw insertError;
+
+        const { error: deleteError } = await supabase
+          .from('post_review_queue')
+          .delete()
+          .eq('id', entry.id);
+        if (deleteError) throw deleteError;
+
+        setStatus('Post approved and published.');
+        await loadFlaggedPosts();
+      } catch (error) {
+        console.error('Approve flagged post failed:', error);
+        setStatus(error?.message || 'Unable to approve post.', true);
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
+
+    async function rejectPost(entry, button) {
+      if (!button) return;
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Rejecting…';
+      setStatus('');
+      try {
+        const { error } = await supabase
+          .from('post_review_queue')
+          .update({ status: 'rejected' })
+          .eq('id', entry.id);
+        if (error) {
+          if (error.code === '42703') {
+            const { error: deleteError } = await supabase
+              .from('post_review_queue')
+              .delete()
+              .eq('id', entry.id);
+            if (deleteError) throw deleteError;
+          } else {
+            throw error;
+          }
+        }
+        setStatus('Post rejected.');
+        await loadFlaggedPosts();
+      } catch (error) {
+        console.error('Reject flagged post failed:', error);
+        setStatus(error?.message || 'Unable to reject post.', true);
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
+
+    closeBtn.addEventListener('click', () => {
+      if (window.opener) {
+        window.close();
+      } else if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.href = './';
+      }
+    });
+
+    unauthorizedCloseBtn.addEventListener('click', () => {
+      if (window.opener) {
+        window.close();
+      } else {
+        window.location.href = './';
+      }
+    });
+
+    refreshBtn.addEventListener('click', () => {
+      loadFlaggedPosts();
+    });
+
+    async function init() {
+      setStatus('Authenticating…');
+      const adminAccess = await ensureAdmin();
+      if (!adminAccess) {
+        return;
+      }
+      await loadFlaggedPosts();
+    }
+
+    init().catch((error) => {
+      console.error('Flagged posts init failed:', error);
+      setStatus(error?.message || 'Failed to load flagged posts.', true);
+    });
+  </script>
+</body>
+</html>
