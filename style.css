@@ -484,11 +484,14 @@ select {
   color: var(--primary);
 }
 .icon-button.flagged {
-  color: #ef4444;
+  color: #ef4444 !important;
+}
+.icon-button.flagged svg {
+  fill: currentColor;
 }
 .icon-button.flagged:hover {
   background: rgba(239, 68, 68, 0.12);
-  color: #b91c1c;
+  color: #b91c1c !important;
 }
 
 .modal-overlay {
