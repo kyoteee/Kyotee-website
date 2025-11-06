@@ -2388,7 +2388,7 @@ function renderProfile() {
     profileAdminCard.setAttribute('aria-hidden', allowAdmin ? 'false' : 'true');
   }
   if (flaggedPostsBtn) {
-    const allowFlagged = Boolean(isOwnProfile && currentUser && isDevUser(currentUser.id));
+    const allowFlagged = Boolean(currentUser && isDevUser(currentUser.id));
     flaggedPostsBtn.hidden = !allowFlagged;
     flaggedPostsBtn.setAttribute('aria-hidden', allowFlagged ? 'false' : 'true');
   }
@@ -3192,6 +3192,11 @@ function updateAuthUI(signedIn) {
     showAuth(true);
   }
   updateCommentsInputState();
+  if (flaggedPostsBtn) {
+    const allowFlagged = Boolean(signedIn && currentUser && isDevUser(currentUser.id));
+    flaggedPostsBtn.hidden = !allowFlagged;
+    flaggedPostsBtn.setAttribute('aria-hidden', allowFlagged ? 'false' : 'true');
+  }
 }
 
 Array.from(document.querySelectorAll('[data-switch-to]')).forEach((button) => {
