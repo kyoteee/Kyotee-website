@@ -489,6 +489,10 @@ select {
 .icon-button.flagged svg {
   fill: currentColor;
 }
+.icon-button.flagged svg path {
+  fill: currentColor;
+  stroke: currentColor;
+}
 .icon-button.flagged:hover {
   background: rgba(239, 68, 68, 0.12);
   color: #b91c1c !important;
